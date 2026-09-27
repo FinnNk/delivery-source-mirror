@@ -29,14 +29,18 @@ def validate(release):
         raise ValueError('Release bundle checksum is missing.')
     files = release.get('files', {})
     if not all(name in files for name in ('chart/Chart.yaml', 'chart/templates/environment.yaml',
-                                          'contracts/index.json', 'app/app.py', 'app/index.html')):
+                                          'contracts/index.json', 'contracts/indexer.py', 'app/app.py', 'app/index.html')):
         raise ValueError('Release is missing deployment, schema or query-pipeline assets.')
     if any(not re.fullmatch(r'[a-f0-9]{64}', value) for value in files.values()):
         raise ValueError('Invalid release file checksum.')
     contract = release.get('index_contract', {})
     if (not contract.get('engine_version') or not contract.get('definitions') or
-            '@sha256:' not in contract.get('indexer_image', '') or not contract.get('indexer_source_sha256')):
+            not re.fullmatch(r'[^\s@]+@sha256:[a-f0-9]{64}', contract.get('indexer_image', '')) or
+            not re.fullmatch(r'[a-f0-9]{64}', contract.get('indexer_source_sha256', '')) or
+            any(set(definition) != {'settings', 'mappings'} for definition in contract['definitions'])):
         raise ValueError('Index compatibility contract is incomplete.')
+    if files['contracts/indexer.py'] != contract['indexer_source_sha256']:
+        raise ValueError('Indexer source hash differs from the compatibility contract.')
     return release
 
 
