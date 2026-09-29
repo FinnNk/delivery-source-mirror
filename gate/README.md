@@ -9,3 +9,4 @@ managed report was blocked because judged coverage was below policy. A separate
 deterministic fixture can exercise the gate's decision states; fixture scores do
 not measure model quality.
 CI also matches the selected variant image digest against the image built from this exact commit.
+The attestation pins an immutable Nexus build receipt for this commit, so a later CI rerun may build a different OCI digest without changing the evaluated image.
