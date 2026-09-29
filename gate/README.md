@@ -8,3 +8,4 @@ The lab rehearsal uses synthetic products, queries and judgements. Its first
 managed report was blocked because judged coverage was below policy. A separate
 deterministic fixture can exercise the gate's decision states; fixture scores do
 not measure model quality.
+CI also matches the selected variant image digest against the image built from this exact commit.

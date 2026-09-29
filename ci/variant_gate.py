@@ -71,7 +71,8 @@ def number(value, name, low=0, high=1):
 
 
 def check(report_bytes, policy_bytes, selection_bytes, attestation, approvals,
-          evidence_key, approval_key, trusted_policy_sha, source_sha, now=None):
+          evidence_key, approval_key, trusted_policy_sha, source_sha, now=None,
+          expected_image=None):
     """Return a review state; malformed or untrusted evidence raises ValueError."""
     now = now or datetime.now(timezone.utc)
     if not re.fullmatch('[0-9a-f]{40}', source_sha) or \
@@ -106,6 +107,7 @@ def check(report_bytes, policy_bytes, selection_bytes, attestation, approvals,
     if any(not isinstance(pin, dict) or not re.fullmatch(
             '[0-9a-f]{64}', str(pin.get('configuration_sha256', ''))) or
             not re.fullmatch('[0-9a-f]{64}', str(pin.get('environment_fingerprint', '')))
+            or not re.fullmatch(r'[^\s@]+@sha256:[0-9a-f]{64}', str(pin.get('image', '')))
             for pin in variants.values()):
         raise ValueError('Variant configuration or environment pin is missing.')
     choices = selection.get('selected')
@@ -150,6 +152,8 @@ def check(report_bytes, policy_bytes, selection_bytes, attestation, approvals,
         variant, intent = choice['variant'], choice['intent']
         if variant not in variants or variant == baseline or intent not in change_policy:
             raise ValueError('Selection names an unknown variant, baseline or intent.')
+        if expected_image is not None and variants[variant]['image'] != expected_image:
+            raise ValueError('Selected variant was not captured from this source build image.')
         score = number(report['metrics'][variant].get(metric), 'Selected metric')
         coverage = number(report['coverage'][variant].get('fraction'), 'Judged coverage')
         changed = report['result_changes'][variant]
@@ -211,9 +215,16 @@ def main():
     parser.add_argument('--approval', type=Path, action='append', default=[])
     parser.add_argument('--approvals-file', type=Path)
     parser.add_argument('--source-sha', required=True)
+    parser.add_argument('--build-metadata', required=True, type=Path)
+    parser.add_argument('--registry', required=True)
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     try:
+        digest = json.loads(args.build_metadata.read_bytes()).get('containerimage.digest')
+        if not re.fullmatch(r'sha256:[0-9a-f]{64}', str(digest)) or \
+                not re.fullmatch(r'[^\s@/]+(?::[0-9]+)?', args.registry):
+            raise ValueError('Source build image metadata is invalid.')
+        expected_image = args.registry + '/search-api@' + digest
         approvals = [json.loads(path.read_bytes()) for path in args.approval]
         if args.approvals_file:
             approvals.extend(json.loads(args.approvals_file.read_bytes()))
@@ -222,7 +233,8 @@ def main():
                         approvals,
                         os.environ['LAB_VARIANT_EVIDENCE_KEY'].encode(),
                         os.environ['LAB_VARIANT_APPROVAL_KEY'].encode(),
-                        os.environ['LAB_VARIANT_POLICY_SHA256'], args.source_sha)
+                        os.environ['LAB_VARIANT_POLICY_SHA256'], args.source_sha,
+                        expected_image=expected_image)
     except (ValueError, KeyError) as error:
         verdict = {'kind': 'variant-gate-verdict', 'state': 'invalid',
                    'reason': str(error)[:160]}
