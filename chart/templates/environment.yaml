@@ -34,6 +34,10 @@ spec:
               value: https://shared-es-http.platform.svc:9200
             - name: ES_INDEX
               value: {{ .Values.index | quote }}
+            {{- if .Values.variant_config_json }}
+            - name: SEARCH_VARIANTS_JSON
+              value: {{ .Values.variant_config_json | quote }}
+            {{- end }}
           envFrom:
             - secretRef:
                 name: search-access

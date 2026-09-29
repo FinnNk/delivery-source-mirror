@@ -1,5 +1,15 @@
 import unittest
 import app
+import variants
+from telemetry import Telemetry, classify, traffic_class
+from http.server import ThreadingHTTPServer
+import http.client
+import io
+import json
+import os
+import threading
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 
 class SearchContract(unittest.TestCase):
@@ -15,6 +25,21 @@ class SearchContract(unittest.TestCase):
         self.assertEqual(body['query']['bool']['filter'], [
             {'term': {'country': 'GB'}}, {'term': {'currency': 'GBP'}}, {'term': {'available': True}}])
         self.assertEqual(body['sort'][-1], {'product_id': 'asc'})
+
+    def test_default_and_explicit_variant_are_separate(self):
+        config = {'default_variant': 'ranker-a', 'variants': {
+            'ranker-a': {'field_boosts': variants.BASE},
+            'ranker-b': {'field_boosts': {**variants.BASE, 'brand': 6}}}}
+        with patch.dict(os.environ, {'SEARCH_VARIANTS_JSON': json.dumps(config)}):
+            default, _, default_sha = variants.select({})
+            selected, settings, selected_sha = variants.select({'X-Lab-Variant': 'ranker-b'})
+            self.assertEqual(default, 'ranker-a')
+            self.assertEqual(selected, 'ranker-b')
+            self.assertNotEqual(default_sha, selected_sha)
+            self.assertIn('brand^6', app.query_body('shirt', 'GB', 'GBP', settings)
+                          ['query']['bool']['must'][0]['multi_match']['fields'])
+            with self.assertRaisesRegex(ValueError, 'Unknown search variant'):
+                variants.select({'X-Lab-Variant': 'missing'})
 
     def test_public_result_shape(self):
         hit = {'_id': 'gb-000001', '_source': {
@@ -42,6 +67,62 @@ class SearchContract(unittest.TestCase):
         self.assertEqual(record['rewrite'], 'none')
         self.assertEqual(record['unavailable_stages'], ['reranker'])
         self.assertEqual(len(record['elasticsearch_request_sha256']), 64)
+
+    def test_sli_classification_counts_slow_success_and_failure(self):
+        self.assertEqual(classify(200, 249.9),
+                         {'eligible': 1, 'success_good': 1, 'responsive_good': 1})
+        self.assertEqual(classify(200, 251),
+                         {'eligible': 1, 'success_good': 1, 'responsive_good': 0})
+        self.assertEqual(classify(502, 20),
+                         {'eligible': 1, 'success_good': 0, 'responsive_good': 0})
+        with self.assertRaises(ValueError):
+            classify(200, -1)
+        self.assertEqual(traffic_class('peak'), 'peak')
+        self.assertEqual(traffic_class('query-id-with-unbounded-values'), 'unspecified')
+
+    def test_completion_log_retains_release_and_tier_without_query(self):
+        output = io.StringIO()
+        with patch.dict(os.environ, {'LAB_RELEASE_SHA': 'sha256:' + 'a' * 64,
+                                      'LAB_DEPLOYMENT_TIER': 'integration'}), \
+                redirect_stdout(output):
+            Telemetry().record(200, 360, 'normal', request_id='synthetic-1')
+        event = json.loads(output.getvalue())
+        self.assertEqual(event['service_version'], 'sha256:' + 'a' * 64)
+        self.assertEqual(event['deployment_tier'], 'integration')
+        self.assertFalse(event['responsive_good'])
+        self.assertNotIn('query', event)
+
+    def test_public_http_result_stays_valid_with_telemetry_disabled(self):
+        hit = {'_source': {'product_id': 'gb-1', 'title': 'Blue shirt', 'brand': 'Alder',
+                           'category': 'clothing', 'price_minor': 2500,
+                           'currency': 'GBP', 'available': True}}
+        elastic = {'hits': {'total': {'value': 1}, 'hits': [hit]}}
+
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                self.close()
+
+        server = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            with patch.dict(os.environ, {'ES_USER': 'reader', 'ES_PASSWORD': 'test',
+                                          'ES_URL': 'https://example.invalid', 'ES_INDEX': 'test'}), \
+                    patch.object(app.ssl, 'create_default_context', return_value=None), \
+                    patch.object(app.urllib.request, 'urlopen', return_value=Response(json.dumps(elastic).encode())):
+                client = http.client.HTTPConnection('127.0.0.1', server.server_port)
+                client.request('GET', '/search?q=shirt', headers={'X-Lab-Traffic-Class': 'normal'})
+                response = client.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.load(response)['ids'], ['gb-1'])
+                client.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=2)
 
 
 if __name__ == '__main__':

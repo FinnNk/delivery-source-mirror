@@ -11,6 +11,8 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from telemetry import telemetry
+from variants import BASE, select
 
 MAX_QUERY_LENGTH = 150
 DIAGNOSTIC_SCHEMA = 1
@@ -33,13 +35,16 @@ def understand(query):
     return query, 'none'
 
 
-def query_body(query, country, currency):
+def query_body(query, country, currency, variant=None):
     understood_query, _decision = understand(query)
+    boosts = (variant or {'field_boosts': BASE})['field_boosts']
     return {
         'size': 20,
         'track_total_hits': True,
         'query': {'bool': {
-            'must': [{'multi_match': {'query': understood_query, 'fields': ['title^4', 'product_type^3', 'brand^2', 'description']}}],
+            'must': [{'multi_match': {'query': understood_query,
+                                     'fields': [field if boosts[field] == 1 else
+                                                f'{field}^{boosts[field]}' for field in BASE]}}],
             'filter': [{'term': {'country': country}}, {'term': {'currency': currency}}, {'term': {'available': True}}],
         }},
         'sort': [{'_score': 'desc'}, {'product_id': 'asc'}],
@@ -100,35 +105,58 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_body(200, body, 'text/html; charset=utf-8')
         if route != '/search':
             return self.send_json(404, {'error': 'Not found'})
+        return self.handle_search(start)
+
+    def handle_search(self, start):
         try:
             query, country, currency = validated_query(self.path)
             correlation_id = diagnostic_options(self.path)
+            variant_id, variant, configuration_sha256 = select(self.headers)
         except ValueError as error:
             return self.send_json(400, {'error': str(error)})
-        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        raw_query = params.get('q', [''])[0]
-        body = query_body(query, country, currency)
-        auth = base64.b64encode((os.environ['ES_USER'] + ':' + os.environ['ES_PASSWORD']).encode()).decode()
-        request = urllib.request.Request(
-            os.environ['ES_URL'] + '/' + os.environ['ES_INDEX'] + '/_search',
-            data=json.dumps(body).encode(),
-            headers={'Content-Type': 'application/json', 'Authorization': 'Basic ' + auth},
-        )
-        try:
-            context = ssl.create_default_context(cafile='/es-ca/tls.crt')
-            es_start = time.monotonic()
-            with urllib.request.urlopen(request, context=context, timeout=10) as response:
-                result = json.load(response)
-            es_ms = (time.monotonic() - es_start) * 1000
-        except Exception as error:
-            self.log_error('Elasticsearch request failed: %s', type(error).__name__)
-            return self.send_json(502, {'error': 'Search is temporarily unavailable.'})
-        api_ms = (time.monotonic() - start) * 1000
-        payload = api_response(query, country, currency, result, api_ms)
-        if correlation_id is not None:
-            payload['diagnostics'] = diagnostic_record(raw_query, query, body, result,
-                                                       correlation_id, api_ms, es_ms)
-        return self.send_json(200, payload)
+        with telemetry.span('search.request', self.headers) as request_span:
+            if request_span is not None:
+                request_span.set_attribute('http.request.method', 'GET')
+                request_span.set_attribute('http.route', '/search')
+            params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            raw_query = params.get('q', [''])[0]
+            with telemetry.span('search.query_understanding'):
+                body = query_body(query, country, currency, variant)
+            auth = base64.b64encode((os.environ['ES_USER'] + ':' + os.environ['ES_PASSWORD']).encode()).decode()
+            headers = {'Content-Type': 'application/json', 'Authorization': 'Basic ' + auth}
+            telemetry.inject(headers)
+            request = urllib.request.Request(
+                os.environ['ES_URL'] + '/' + os.environ['ES_INDEX'] + '/_search',
+                data=json.dumps(body).encode(), headers=headers)
+            try:
+                with telemetry.span('search.elasticsearch') as dependency_span:
+                    if dependency_span is not None:
+                        dependency_span.set_attribute('db.collection.name', os.environ['ES_INDEX'])
+                    context = ssl.create_default_context(cafile='/es-ca/tls.crt')
+                    es_start = time.monotonic()
+                    with urllib.request.urlopen(request, context=context, timeout=10) as response:
+                        result = json.load(response)
+                    es_ms = (time.monotonic() - es_start) * 1000
+            except Exception as error:
+                self.log_error('Elasticsearch request failed: %s', type(error).__name__)
+                telemetry.record(502, (time.monotonic() - start) * 1000,
+                                 self.headers.get('X-Lab-Traffic-Class'), type(error).__name__, correlation_id)
+                return self.send_json(502, {'error': 'Search is temporarily unavailable.'})
+            api_ms = (time.monotonic() - start) * 1000
+            try:
+                payload = api_response(query, country, currency, result, api_ms)
+                payload['variant_id'] = variant_id
+                payload['configuration_sha256'] = configuration_sha256
+            except (KeyError, TypeError, ValueError) as error:
+                telemetry.record(502, api_ms, self.headers.get('X-Lab-Traffic-Class'),
+                                 type(error).__name__, correlation_id)
+                return self.send_json(502, {'error': 'Search response is temporarily unavailable.'})
+            if correlation_id is not None:
+                payload['diagnostics'] = diagnostic_record(raw_query, query, body, result,
+                                                           correlation_id, api_ms, es_ms)
+            telemetry.record(200, api_ms, self.headers.get('X-Lab-Traffic-Class'),
+                             request_id=correlation_id)
+            return self.send_json(200, payload)
 
     def send_json(self, status, value):
         self.send_body(status, json.dumps(value).encode(), 'application/json; charset=utf-8')
@@ -143,4 +171,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+    telemetry.configure()
     ThreadingHTTPServer(('0.0.0.0', 8080), Handler).serve_forever()
