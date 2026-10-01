@@ -20,7 +20,7 @@ class DemoContract(unittest.TestCase):
             # The real dependency method must never be called, even without ES settings.
             with patch.dict(os.environ, {key: value for key, value in os.environ.items() if not key.startswith('ES_')}, clear=True), \
                  patch('app.Handler.search_index', side_effect=AssertionError('Real backend called')):
-                with urllib.request.urlopen(url) as response:
+                with urllib.request.urlopen(url + '/?q=running+shoes') as response:
                     self.assertIn('Standalone demo', response.read().decode())
                 with urllib.request.urlopen(url + '/search?q=running+shoes&diagnostics=1') as response:
                     result = json.load(response)

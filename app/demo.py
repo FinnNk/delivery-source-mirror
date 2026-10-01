@@ -4,6 +4,7 @@ import re
 import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import urlparse
 
 from app import Handler
 
@@ -44,7 +45,7 @@ class DemoHandler(Handler):
         return mock_search(body), (time.monotonic() - started) * 1000
 
     def do_GET(self):
-        if self.path == '/':
+        if urlparse(self.path).path == '/':
             page = Path(__file__).with_name('index.html').read_text(encoding='utf-8')
             page = re.sub(r'(<div class="eyebrow">).*?(</div>)', r'\1Standalone demo - 8 mock products\2', page)
             page = page.replace('Explore the baseline search.', 'Explore the mock search.')
