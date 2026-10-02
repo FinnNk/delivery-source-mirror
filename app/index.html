@@ -41,7 +41,7 @@
     <div id="results" class="grid"><p class="empty">Search above or try one of the suggestions.</p></div>
     <details class="meta"><summary>Search details</summary><p id="timing">Only available products appear in results.</p></details>
   </main>
-  <footer>A lab storefront for testing search. Products and prices are synthetic.</footer>
+  <footer>A lab storefront for testing search. ESCI products with GBP lab prices.</footer>
   <script>
     const form=document.querySelector('#search-form'),input=document.querySelector('#query'),results=document.querySelector('#results'),heading=document.querySelector('#heading'),error=document.querySelector('#error'),timing=document.querySelector('#timing');
     const money=pence=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(pence/100);
