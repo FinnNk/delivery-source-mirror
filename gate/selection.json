@@ -1,1 +1,10 @@
-{"kind":"variant-gate-selection","schema_version":1,"selected":[{"intent":"preserve-results","variant":"ranker-a"}]}
+{
+    "kind": "variant-gate-selection",
+    "schema_version": 1,
+    "selected": [
+        {
+            "intent": "ranking-change",
+            "variant": "ranker-a"
+        }
+    ]
+}
