@@ -26,10 +26,33 @@ Application tests and builds run separately. If a PR changes only `README.md`, `
    }
    ```
 
-2. **Push the branch and open a PR.** In Gitea's **Actions** tab, wait for **Reference release CI** to build that exact commit. An initial relevance-check failure is expected until its report is available.
-3. **Evaluate the built image in the lab.** Use frozen inputs: saved versions of the products, queries and labels that stay unchanged during the comparison. Review relevance scores, label coverage and changed results.
-4. **Publish the evidence.** Give the frozen report and build receipt to the lab operator. The operator signs and publishes them to Nexus, the artefact repository. The signed record binds the report to the exact source commit and evaluated image.
-5. **Rerun Offline relevance gate on the same commit.** If you change the source commit, obtain evidence for the new commit. A passing build alone does not satisfy this check.
+2. **Push the branch and open a PR.** CI builds the exact commit; the coordinator waits for its successful receipt before comparing it with the baseline.
+3. **Open the PR's comparison links.** The comment lists both storefronts, their expiry and the report. Review relevance, label coverage, changed results and RBO/Jaccard overlap.
+4. **Wait for `relevance-lab/merge-gate`.** It stays pending while fresh searches run and the coordinator signs the report. The submission workflow completing is insufficient to merge.
+5. **Review the outcome.** Every new commit gets a new comparison. A passing build alone cannot satisfy the gate. A recorded exception preserves the measurements and reason.
+
+`gate/evaluation.json` names the default and baseline. Files in `configurations/`
+define their ranking settings. The coordinator reads baseline settings from its
+revision and candidate settings from the PR head. Both use the same frozen inputs.
+
+## Add a query set
+
+Add `additional_query_sets` to `selection.json` for queries specific to your
+change. For example:
+
+```json
+"additional_query_sets": [
+  {"name": "trainers", "path": "evaluation/queries/trainers.jsonl", "required": false}
+]
+```
+
+The supplied file contains the rewrite, its case variant and two controls.
+Extra sets report only by default. Their separate metrics and the combined view
+are retained in the report; the standard frozen suite remains required.
+An unlabelled set reports overlap and ordering, with relevance shown as unavailable.
+To require an extra set, set `required` to `true` and supply a `judgements` path
+to reviewed reference labels. Each required set passes independently. See the
+[query-set contract](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/variant-evaluation.md#add-queries-for-your-change).
 
 ## Read the outcome
 
@@ -51,6 +74,6 @@ approve it. Low-coverage ranking changes remain blocked. Unqualified labels outs
 
 A gate update requires review and protected policy/code pin updates after merging to its trusted target. Existing PRs also need fresh evidence for their exact commits.
 
-An exception preserves the scores and binds the decision to the report, source commit, policy and selected variant. It does not approve deployment. Merge still requires an approving PR review and the passing build check.
+An exception preserves the scores and binds the decision to the report, source commit, policy and selected variant. It does not approve deployment. Source merge requires passing checks; the lab allows authors to merge their own demonstration changes. Deployment requires a separate approving reviewer.
 
 The [variant evaluation guide](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/variant-evaluation.md) explains report fields and evidence publication. Synthetic fixture scores demonstrate the workflow, not real search quality.

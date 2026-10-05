@@ -116,16 +116,16 @@ class SearchContract(unittest.TestCase):
             server.server_close()
             worker.join(timeout=2)
 
-        def test_trainers_query_rewrite(self):
-            self.assertEqual(
-                app.understand('Trainers'),
-                ('running shoes', 'trainers-to-running-shoes'),
-            )
-            body = app.query_body('trainers', 'GB', 'GBP')
-            self.assertEqual(
-                body['query']['bool']['must'][0]['multi_match']['query'],
-                'running shoes',
-            )
+    def test_trainers_query_rewrite(self):
+        self.assertEqual(
+            app.understand('Trainers'),
+            ('running shoes', 'trainers-to-running-shoes'),
+        )
+        body = app.query_body('trainers', 'GB', 'GBP')
+        self.assertEqual(
+            body['query']['bool']['must'][0]['multi_match']['query'],
+            'running shoes',
+        )
 
 
 if __name__ == '__main__':
