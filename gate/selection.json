@@ -12,6 +12,12 @@
       "name": "trainers",
       "path": "evaluation/queries/trainers.jsonl",
       "required": false
+    },
+    {
+      "name": "sparse-published",
+      "path": "evaluation/queries/sparse-published.jsonl",
+      "judgements": "evaluation/labels/sparse-published.jsonl",
+      "required": true
     }
   ]
 }
