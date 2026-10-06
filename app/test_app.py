@@ -127,6 +127,19 @@ class SearchContract(unittest.TestCase):
             'running shoes',
         )
 
+    def test_sneakers_query_rewrite(self):
+        # Check the rewrite decision and the query sent to Elasticsearch.
+        # Relevance is assessed separately by the lab comparison.
+        self.assertEqual(
+            app.understand('Sneakers'),
+            ('running shoes', 'sneakers-to-running-shoes'),
+        )
+        body = app.query_body('sneakers', 'GB', 'GBP')
+        self.assertEqual(
+            body['query']['bool']['must'][0]['multi_match']['query'],
+            'running shoes',
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
