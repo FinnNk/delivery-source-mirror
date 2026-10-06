@@ -38,6 +38,12 @@ spec:
             - name: SEARCH_VARIANTS_JSON
               value: {{ .Values.variant_config_json | quote }}
             {{- end }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://lab-otel-gateway.lab-observability.svc.cluster.local:4318
+            - name: LAB_RELEASE_SHA
+              value: {{ .Values.image | quote }}
+            - name: LAB_DEPLOYMENT_TIER
+              value: {{ .Values.environment | quote }}
           envFrom:
             - secretRef:
                 name: search-access
@@ -119,6 +125,15 @@ spec:
               elasticsearch.k8s.elastic.co/cluster-name: shared
       ports:
         - port: 9200
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: lab-observability
+          podSelector:
+            matchLabels:
+              app: lab-otel-gateway
+      ports:
+        - port: 4318
 ---
 apiVersion: v1
 kind: ResourceQuota
