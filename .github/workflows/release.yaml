@@ -32,6 +32,7 @@ jobs:
           SOURCE_REPOSITORY: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           EVENT_KIND: ${{ github.event_name }}
           REGISTRY: ${{ vars.RELEASE_REGISTRY }}
           ARTIFACT_URL: ${{ vars.RELEASE_ARTIFACT_URL }}
