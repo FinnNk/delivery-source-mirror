@@ -1,7 +1,7 @@
 [project]
 name = "delivery-search-api"
 # Release ordering is owned by VERSION; this is matching project metadata.
-version = "1.1.0"
+version = "1.1.1"
 requires-python = ">=3.13,<3.14"
 dependencies = [
   "opentelemetry-api==1.44.0",
