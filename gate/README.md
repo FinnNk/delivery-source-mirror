@@ -119,3 +119,19 @@ report, source commit, policy, selection, variant, reviewer and decision merge
 commit. An exception preserves the scores. It does not approve deployment. Source merge requires passing checks; the lab allows authors to merge their own demonstration changes. Deployment requires a separate approving reviewer.
 
 The [variant evaluation guide](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/variant-evaluation.md) explains report fields and evidence publication. Synthetic fixture scores demonstrate the workflow, not real search quality.
+
+## Review accumulated release checks
+
+Before promoting a build, open its release dashboard and suggest a release check
+plan against the current destination baseline. Review the accumulated commits,
+each variant's combined release intent and every inherited additional query set.
+Explicitly retain, replace or retire suggested sets, with reasons for reduced
+requirements. All standard sets remain mandatory.
+
+Create the plan PR, approve its exact head as the named human administrator,
+then choose **Record approved plan** in the dashboard. Only then run promotion
+checks and review the separate deployment proposal. Candidate variants and
+configurations remain fixed by the source build. Review a separate plan for each
+destination; a changed baseline or recorded plan requires fresh checks.
+
+See the [release check plan walkthrough](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/release-check-plans.md).
