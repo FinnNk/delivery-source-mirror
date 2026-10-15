@@ -3,7 +3,7 @@
   "schema_version": 1,
   "selected": [
     {
-      "intent": "ranking-change",
+      "intent": "preserve-results",
       "variant": "ranker-a"
     }
   ],
