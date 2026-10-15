@@ -12,6 +12,11 @@
       "name": "sneakers",
       "path": "evaluation/queries/sneakers.jsonl",
       "required": false
+    },
+    {
+      "name": "redis-rewrites",
+      "path": "evaluation/queries/redis-rewrites.jsonl",
+      "required": false
     }
   ]
 }
