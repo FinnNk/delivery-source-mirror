@@ -186,3 +186,7 @@ time show **Promotion time not recorded**. Kubernetes projects metadata updates
 into running Pods, so the time can take a short while to appear after deployment.
 The footer reads matching image/source metadata, never another production slot's
 release. It does not use build time or Pod restart time as promotion time.
+
+## Preview a branch without a PR
+
+Open [Search lab](https://control.localhost:34443/) and use **Build and create preview**. Enter a pushed branch or full commit SHA, choose a catalogue, and follow the build/progress link. The service pins the commit and creates the environment after a successful build. Preview versions do not qualify for promotion; use the normal reviewed release process afterwards. See the [lab branch preview guide](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/branch-previews.md) for recovery and setup details.

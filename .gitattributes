@@ -1,1 +1,4 @@
 VERSION text eol=lf
+
+# Linux CI scripts retain executable shell syntax after Windows checkout.
+ci/*.sh text eol=lf
