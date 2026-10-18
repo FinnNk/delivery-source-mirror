@@ -9,6 +9,10 @@ Application tests and builds run separately. If a PR changes only `README.md`, `
 
 ## Prepare your PR
 
+Fresh repositories include a selection of `ranker-a` with `preserve-results`.
+For an intentional rewrite or ranking change, change its intent to
+`ranking-change` before pushing.
+
 1. **Choose what to evaluate.** Edit [selection.json](selection.json) to name the candidate variants and their intent. Use names from your evaluation, excluding its baseline.
 
    | Intent | Use it when |
@@ -34,6 +38,11 @@ Application tests and builds run separately. If a PR changes only `README.md`, `
 `gate/evaluation.json` names the default and baseline. Files in `configurations/`
 define their ranking settings. The coordinator reads baseline settings from its
 revision and candidate settings from the PR head. Both use the same frozen inputs.
+
+If a comparison reports a missing `gate/selection.json`, add the example above
+as that file on your PR branch, choose the appropriate intent, commit it and
+push. An empty commit cannot supply a missing file. The installer preserves
+existing repositories rather than overwriting their selections.
 
 ## Select one or more variants
 
@@ -120,6 +129,29 @@ commit. An exception preserves the scores. It does not approve deployment. Sourc
 
 The [variant evaluation guide](https://gitea.localhost:34443/elastic-agent/ephemeral-elastic-search-stack/src/branch/main/docs/variant-evaluation.md) explains report fields and evidence publication. Synthetic fixture scores demonstrate the workflow, not real search quality.
 
+### Additional sets during promotion
+
+Source comparisons use this selection directly. For promotions, the dashboard
+suggests a plan from declarations across all commits since the target baseline,
+including removed declarations. Review the cumulative intent and additional
+sets, approve the exact plan PR head in delivery-state and record it before checks. Every selected candidate variant is compared with the target baseline
+using the standard suite and each named additional set. Required sets must pass
+separately; report-only failures remain informational. The combined view never
+opens a gate. A custom primary manifest cannot replace the catalogue's standard
+suite. Candidate variants and configurations remain fixed by the source.
+A reviewed release plan can adjust additional sets and release intents without
+rebuilding. Reducing inherited requirements needs an explicit reason; protected
+standard sets cannot be removed or weakened.
+
+### Standard and additional query sets
+
+The lab policy defines one or more **Standard query sets**; all are mandatory
+for every selected variant in source and promotion checks. The source selection
+defines zero or more **Additional query sets**, each Required or Report only.
+Names beginning `primary-` are reserved for standard sets. Combined scores never
+replace individual required outcomes. Standard-group changes need a reviewed
+lab-policy change; they cannot be made by opting out in this repository.
+
 ## Review accumulated release checks
 
 Before promoting a build, open its release dashboard and suggest a release check
@@ -129,8 +161,9 @@ Explicitly retain, replace or retire suggested sets, with reasons for reduced
 requirements. All standard sets remain mandatory.
 
 Create the plan PR, approve its exact head as the named human administrator,
-then choose **Record approved plan** in the dashboard. Only then run promotion
-checks and review the separate deployment proposal. Candidate variants and
+then choose **Record approval and start checks** in the dashboard. To defer
+checks, choose **Record approved plan only**. Review the separate deployment
+proposal after the checks finish. Candidate variants and
 configurations remain fixed by the source build. Review a separate plan for each
 destination; a changed baseline or recorded plan requires fresh checks.
 
@@ -146,9 +179,11 @@ remain covered by their separate catalogue-specific query sets.
 
 Add `evaluation/queries/redis-rewrites.jsonl` to `additional_query_sets` with the
 name `redis-rewrites` and `required: false`. The comparison captures results and
-reports label resolution, relevance and result changes. This set has no authored
-reference judgements, so it is report only; the protected standard sets remain
-mandatory. Exercising an alias does not by itself establish relevance quality or
+reports label resolution, relevance and result changes. It includes accepted
+Luna judgements at `evaluation/judgements/redis-rewrites.jsonl`, retaining
+90% coverage on each side of the packaged capture. Include that `judgements`
+path in the declaration. These model labels remain advisory; the protected
+standard sets remain mandatory. Exercising an alias does not by itself establish relevance quality or
 verify the Redis failure fallback, which has separate API contract tests.
 
 For promotions, review this set in the accumulated release check plan. A source

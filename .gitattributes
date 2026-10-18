@@ -1,4 +1,7 @@
 VERSION text eol=lf
 
+# Frozen evaluation hashes must survive every checkout.
+evaluation/** -text
+
 # Linux CI scripts retain executable shell syntax after Windows checkout.
 ci/*.sh text eol=lf
